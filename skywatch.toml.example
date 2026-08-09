@@ -1,0 +1,43 @@
+# skywatch — local configuration.
+#
+# Copy this to `skywatch.toml` next to it (gitignored) and fill it in. Two other
+# places work equally well: `~/.skywatch.toml`, or point the SKYWATCH_VAULT
+# environment variable at any TOML file containing these sections — useful if you
+# already keep secrets somewhere central.
+#
+# Any single value can also come from the environment, which beats every file:
+#   SKYWATCH_BOT_TOKEN  SKYWATCH_ALLOWED_CHAT_IDS  SKYWATCH_TOPIC  SKYWATCH_CONTACT
+#
+# Nothing here ships with a default. Without a token the daemon still runs and
+# serves ntfy subscribers; it logs a warning and skips Telegram.
+
+[skywatch]
+# Advertised to Nominatim and Celestrak in the User-Agent. Both enforce their
+# usage policies against whoever this names, so put your own URL or email here —
+# never someone else's, or your traffic spends their reputation.
+CONTACT = 'github.com/yourname'
+
+[skywatch.telegram]
+# From @BotFather -> /newbot. This token *is* the bot; anyone holding it controls
+# it. Rotate with @BotFather -> /revoke.
+BOT_TOKEN = ''
+BOT_USERNAME = ''
+
+# Telegram chat ids allowed to talk to the bot, comma-separated. Anything from
+# any other chat is dropped before parsing, geocoding or any pass computation.
+#
+# KEEP THIS SET unless you deliberately want a public bot. A bot username is
+# world-visible and searchable, this daemon runs on your own machine, there is no
+# rate limiting, and a single /tonight is roughly 30 seconds of CPU. Leaving it
+# empty means any stranger who finds the username can spend your CPU and your
+# Nominatim quota.
+#
+# Find your own id by messaging @userinfobot, or leave this empty briefly and
+# read it out of `data/skywatch.log`.
+ALLOWED_CHAT_IDS = ''
+
+[skywatch.ntfy]
+# Optional ntfy.sh mirror, on top of Telegram. Topics are unauthenticated — the
+# name is the only thing keeping strangers out — so pick something unguessable,
+# not 'skywatch'. Leave empty to use Telegram only.
+TOPIC = ''

@@ -1,0 +1,4 @@
+skyfield>=1.49
+sgp4>=2.23
+numpy>=1.24
+timezonefinder>=6.2

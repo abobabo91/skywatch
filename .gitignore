@@ -1,0 +1,9 @@
+data/
+*.bsp
+__pycache__/
+*.pyc
+.venv/
+coverage-check.log
+# Local secrets and per-install settings. Never commit these.
+skywatch.toml
+.skywatch.toml
