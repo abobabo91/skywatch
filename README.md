@@ -210,21 +210,43 @@ already alive and starts it if not, which covers reboots, crashes and waking fro
 sleep.
 
 ```powershell
-$base    = "$PWD\tasks"        # run from the project root
-$action  = New-ScheduledTaskAction -Execute "wscript.exe" `
+$base     = "$PWD\tasks"        # run from the project root
+$action   = New-ScheduledTaskAction -Execute "wscript.exe" `
   -Argument "`"$base\run-hidden.vbs`" `"$base\run.bat`""
-$trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) `
+$trigger  = New-ScheduledTaskTrigger -Once -At (Get-Date) `
   -RepetitionInterval (New-TimeSpan -Minutes 5)
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries `
+  -DontStopIfGoingOnBatteries -StartWhenAvailable `
+  -MultipleInstances IgnoreNew
 Register-ScheduledTask -TaskName "Skywatch" -Action $action -Trigger $trigger `
-  -Description "Satellite pass alerter (Telegram + ntfy)"
+  -Settings $settings -Description "Satellite pass alerter (Telegram + ntfy)"
+```
+
+**The `-Settings` line is required on a laptop, not cosmetic.** Omit it and the
+task inherits the Task Scheduler default `DisallowStartIfOnBatteries = true`:
+the 5-minute supervisor silently stops firing the moment the machine is
+unplugged, and does not resume until AC is back. Nothing is logged — the task
+shows `State: Ready`, `LastTaskResult: 0`, and a `NextRunTime` that keeps
+rolling forward without ever running. The already-running daemon survives, so
+the only thing lost is the restart-on-crash guarantee, which is exactly what
+the task exists for. Verify with:
+
+```powershell
+(Get-ScheduledTask -TaskName Skywatch).Settings.DisallowStartIfOnBatteries  # must be False
 ```
 
 If `Register-ScheduledTask` returns `Access is denied` unelevated, use
-`schtasks /Create` instead — it succeeds where the cmdlet does not:
+`schtasks /Create` instead — it succeeds where the cmdlet does not. It has the
+same battery default, so patch the two flags afterwards:
 
 ```powershell
 schtasks /Create /TN "Skywatch" /TR "wscript.exe `"$base\run-hidden.vbs`" `"$base\run.bat`"" `
   /SC MINUTE /MO 5 /RL LIMITED /F
+$t = Get-ScheduledTask -TaskName "Skywatch"
+$t.Settings.DisallowStartIfOnBatteries = $false
+$t.Settings.StopIfGoingOnBatteries     = $false
+$t.Settings.StartWhenAvailable          = $true
+Set-ScheduledTask -TaskName "Skywatch" -Settings $t.Settings
 ```
 
 **Caveat:** alerts only fire while the machine is awake. Most passes are between
