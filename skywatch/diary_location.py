@@ -78,15 +78,19 @@ def configured() -> bool:
     return _creds() is not None
 
 
-def fetch() -> dict | None:
-    """The diary's map.json, or None when unconfigured or unchanged since last time."""
+def fetch(use_etag: bool = True) -> dict | None:
+    """The diary's map.json, or None when unconfigured or unchanged since last time.
+
+    `use_etag=False` always downloads: the CLI's --apply calls this twice in one
+    process, and the second call must not be answered by the first one's 304.
+    """
     global _etag
     creds = _creds()
     if creds is None:
         return None
     auth = base64.b64encode(f"skywatch:{creds['password']}".encode()).decode()
     headers = {"Authorization": f"Basic {auth}", "User-Agent": config.USER_AGENT}
-    if _etag:
+    if _etag and use_etag:
         headers["If-None-Match"] = _etag
     req = urllib.request.Request(creds["url"].rstrip("/") + MAP_PATH, headers=headers)
     try:
@@ -139,7 +143,7 @@ def follow(apply: bool = True, force: bool = False) -> list[tuple[dict, Spot, fl
     if not subs:
         return []
     try:
-        data = fetch()
+        data = fetch(use_etag=not force)
     except (OSError, urllib.error.URLError, ValueError) as exc:
         log.warning("diary map unavailable: %s", exc)
         return []
