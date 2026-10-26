@@ -4,7 +4,7 @@
     python -m skywatch.cli next     --lat 47.6407 --lon 18.9324
     python -m skywatch.cli trains
     python -m skywatch.cli refresh  --force
-    python -m skywatch.cli phone [--apply]
+    python -m skywatch.cli diary [--apply]
 """
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="skywatch.cli")
     ap.add_argument("command",
                     choices=["tonight", "next", "all", "trains", "refresh",
-                             "subscribers", "demo-train", "coverage", "phone"])
+                             "subscribers", "demo-train", "coverage", "diary"])
     ap.add_argument("--lat", type=float, default=47.6407)
     ap.add_argument("--lon", type=float, default=18.9324)
     ap.add_argument("--tz", default="Europe/Budapest")
@@ -42,7 +42,7 @@ def main(argv=None) -> int:
     ap.add_argument("--kinds")
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--apply", action="store_true",
-                    help="phone: actually move the followers, not just report")
+                    help="diary: actually move the followers, not just report")
     ap.add_argument("--limit", type=int, default=10)
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args(argv)
@@ -60,25 +60,27 @@ def main(argv=None) -> int:
     store.init()
     engine = Engine()
 
-    if args.command == "phone":
-        # Where the phone says the observer is, and who would move there.
-        from . import phone_location
-        if not phone_location.configured():
-            print("no [dropbox.diary_reader] credentials in the vault")
+    if args.command == "diary":
+        # Where the latest daily diary ends, and who would move there.
+        from . import diary_location
+        if not diary_location.configured():
+            print("no [diary.web] url/password in the vault")
             return 1
-        ping = phone_location.latest()
-        if ping is None:
-            print("no ping in the Dropbox file")
+        data = diary_location.fetch()
+        spot = diary_location.latest_spot(data) if data else None
+        if spot is None:
+            print("diary map has no day with a route")
             return 1
-        print(f"phone: {ping.lat:.5f}, {ping.lon:.5f}  ({ping.stamp}; file modified "
-              f"{ping.modified:%Y-%m-%d %H:%M} UTC, {ping.age_seconds / 60:.0f} min ago)")
-        for sub in phone_location.followers():
-            km = phone_location.distance_km(sub["lat"], sub["lon"], ping.lat, ping.lon)
+        print(f"diary: {spot.lat:.5f}, {spot.lon:.5f}  (last point of {spot.day}, "
+              f"{spot.age_days} day(s) old; file generated {spot.generated}; "
+              f"applied day so far: {store.get_state(diary_location.STATE_KEY) or '-'})")
+        for sub in diary_location.followers():
+            km = diary_location.distance_km(sub["lat"], sub["lon"], spot.lat, spot.lon)
             print(f"  subscriber {sub['id']} at {sub.get('place') or '?'} "
                   f"({sub['lat']:.4f}, {sub['lon']:.4f}): {km:.1f} km away"
-                  + ("" if km >= phone_location.MIN_MOVE_KM else " - stays"))
+                  + ("" if km >= diary_location.MIN_MOVE_KM else " - stays"))
         if args.apply:
-            for sub, p, km in phone_location.follow(apply=True):
+            for sub, _spot, km in diary_location.follow(apply=True, force=True):
                 new = store.get_by_id(sub["id"])
                 print(f"  moved subscriber {sub['id']} -> {new['place']} ({new['tz']})")
         return 0

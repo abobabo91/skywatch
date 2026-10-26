@@ -54,7 +54,7 @@ that produce confident wrong answers, chiefly the NORAD-100000 TLE truncation.
 | `skywatch/daemon.py` | Scheduler loop |
 | `skywatch/supervisor.py` | Starts the daemon when none runs; in-process liveness check, never `tasklist` |
 | `skywatch/singleton.py` | The daemon's own one-per-machine lock (named mutex / flock) |
-| `skywatch/phone_location.py` | Last GPS ping from the diary's Dropbox file -> the private subscribers' location |
+| `skywatch/diary_location.py` | Last point of the latest diary day (the diary site's `map.json`) -> the private subscribers' location, once per diary day |
 | `skywatch/cli.py` | Everything the bot does, without Telegram |
 
 `data/` holds the sqlite DB, TLE cache and log. Gitignored.

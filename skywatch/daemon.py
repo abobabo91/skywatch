@@ -23,7 +23,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from . import config, events, phone_location, render, singleton, store, transports
+from . import config, diary_location, events, render, singleton, store, transports
 from .bot import Bot
 from .engine import Engine
 from .passes import Observer
@@ -87,13 +87,13 @@ class Scheduler:
         last_follow = 0.0
         while not self._stop.is_set():
             started = time.time()
-            # Where is the observer? Ask the phone first, so a tick after a
-            # flight computes for the city you landed in, not the one you left.
-            if time.time() - last_follow > phone_location.FOLLOW_SECONDS:
+            # Where is the observer? Where the latest daily diary ends. Checked
+            # hourly (a 304 when nothing changed), applied once per diary day.
+            if time.time() - last_follow > diary_location.CHECK_SECONDS:
                 try:
-                    phone_location.follow()
+                    diary_location.follow()
                 except Exception:
-                    log.exception("phone follow failed")
+                    log.exception("diary follow failed")
                 last_follow = time.time()
             try:
                 self.tick()

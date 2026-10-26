@@ -274,36 +274,36 @@ python -m skywatch.daemon --verbose
 python -m skywatch.daemon --once      # single scheduler tick, then exit
 ```
 
-## Following the phone
+## Following the diary
 
-The private bot's allowed chats follow the phone, so `/tonight` and the alerts
-are for wherever you actually are. `skywatch/phone_location.py` reads the GPS
-file the phone appends to on Dropbox (`/locations.txt`, the same file the daily
-diary consumes; an iOS Shortcut writes one `M/D/YY, H:MM AM- lat, lon[, app]`
-line per ping), takes the last line, and every 15 minutes moves each follower
-there when the phone is more than 2 km from the stored spot — timezone from
-`timezonefinder`, place name from Nominatim, same as a shared Telegram pin.
-The engine caches passes per location, so the next tick simply computes for the
-new place. The first check runs at daemon start, before the first tick.
+The private bot's allowed chats follow the daily diary, so `/tonight` and the
+alerts are for wherever you actually are. Once a day the diary site publishes
+`/data/map.json` (one entry per diary day with that day's GPS route);
+`skywatch/diary_location.py` takes the last point of the most recent day and
+moves each follower there when it is more than 2 km from the stored spot —
+timezone from `timezonefinder`, place name from Nominatim, same as a shared
+Telegram pin. The engine caches passes per location, so the next tick simply
+computes for the new place.
 
-What it will not do: move anyone when the file is older than 3 days by
-Dropbox's `server_modified` (phone off or not syncing — the line's own stamp is
-phone-local with no zone and is not trusted), or move subscribers in open mode
-(no `ALLOWED_CHAT_IDS`), since strangers' alerts must not track the owner's
-phone. `/where` still works and still takes effect immediately; the next check
-overrides it only if the phone is 2+ km away from what you set.
+Cadence is "once a day" in the diary's sense: the file is polled hourly with
+`If-None-Match` (a 304 when nothing changed), and a move is applied at most
+once per diary day (`bot_state.diary_day`), so a new diary moves you the hour
+it is published, and nothing happens in between. A latest day older than 3
+days (diary not running) moves nobody, and open mode (no `ALLOWED_CHAT_IDS`)
+never follows — strangers' alerts must not track the owner's diary. `/where`
+still works immediately; the next new diary day overrides it only if its last
+point is 2+ km away.
 
-Credentials: `[dropbox.diary_reader]` in the same `vault.toml` as the bot token
-(`app_key`, `app_secret`, `refresh_token` — a scoped Dropbox app with read
-access). Without that section the daemon logs nothing and nobody moves.
+Credentials: `[diary.web]` in the same `vault.toml` as the bot token — `url`
+(the diary site) and `password` (the site's HTTP Basic password, any username).
+Without the section nothing is fetched and nobody moves. The password is not
+recoverable from Vercel (`vercel env pull` yields `[SENSITIVE]`), so it is
+entered by hand.
 
 ```bash
-python -m skywatch.cli phone           # where the phone is, who would move, how far
-python -m skywatch.cli phone --apply   # move them now instead of waiting for the daemon
+python -m skywatch.cli diary           # where the latest diary ends, who would move, how far
+python -m skywatch.cli diary --apply   # move them now, ignoring the once-per-day memory
 ```
-
-Measured 2026-10-26 23:09: daemon start, ping 7 min old, subscriber moved
-Budakalász → Savannah, United States (8,121 km), timezone America/New_York.
 
 ## How it works
 
