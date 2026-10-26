@@ -34,6 +34,9 @@ that produce confident wrong answers, chiefly the NORAD-100000 TLE truncation.
   em-dash corrupts the parser.
 - **`PYTHONIOENCODING=utf-8` on every subprocess and console entry point.** The
   console here is cp1250 and rendered messages contain emoji and degree signs.
+- **Liveness is never decided by a subprocess with a timeout, and "unknown" means
+  "running".** 63 daemons piled up on 2026-10-26 because a `tasklist` timeout
+  read as "not running". The daemon holds a mutex (`singleton.py`); keep it.
 
 ## Layout
 
@@ -49,7 +52,9 @@ that produce confident wrong answers, chiefly the NORAD-100000 TLE truncation.
 | `skywatch/geocode.py` | Place-name search + reverse lookup (Nominatim) |
 | `skywatch/bot.py` | Telegram long-poll bot |
 | `skywatch/daemon.py` | Scheduler loop |
-| `skywatch/supervisor.py` | Single-instance guard for Task Scheduler |
+| `skywatch/supervisor.py` | Starts the daemon when none runs; in-process liveness check, never `tasklist` |
+| `skywatch/singleton.py` | The daemon's own one-per-machine lock (named mutex / flock) |
+| `skywatch/phone_location.py` | Last GPS ping from the diary's Dropbox file -> the private subscribers' location |
 | `skywatch/cli.py` | Everything the bot does, without Telegram |
 
 `data/` holds the sqlite DB, TLE cache and log. Gitignored.

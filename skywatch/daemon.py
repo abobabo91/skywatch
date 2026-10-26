@@ -23,7 +23,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from . import config, events, render, store, transports
+from . import config, events, phone_location, render, singleton, store, transports
 from .bot import Bot
 from .engine import Engine
 from .passes import Observer
@@ -84,8 +84,17 @@ class Scheduler:
     def run(self) -> None:
         log.info("scheduler started")
         last_prune = 0.0
+        last_follow = 0.0
         while not self._stop.is_set():
             started = time.time()
+            # Where is the observer? Ask the phone first, so a tick after a
+            # flight computes for the city you landed in, not the one you left.
+            if time.time() - last_follow > phone_location.FOLLOW_SECONDS:
+                try:
+                    phone_location.follow()
+                except Exception:
+                    log.exception("phone follow failed")
+                last_follow = time.time()
             try:
                 self.tick()
             except Exception:
@@ -187,6 +196,11 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     setup_logging(args.verbose)
+    # One daemon per machine, decided here and not by the supervisor's guess:
+    # 63 copies ran side by side on 2026-10-26 before this existed.
+    if not args.once and not singleton.acquire():
+        log.info("another skywatch daemon holds the lock; exiting (pid %d)", os.getpid())
+        return 0
     # First thing in the log, before the slow work. Importing skyfield/numpy can
     # take the best part of a minute on a loaded machine, and without this line
     # a healthy daemon looks hung.

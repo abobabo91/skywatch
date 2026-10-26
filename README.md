@@ -209,6 +209,18 @@ via `run-hidden.vbs`; `skywatch.supervisor` exits immediately if the daemon is
 already alive and starts it if not, which covers reboots, crashes and waking from
 sleep.
 
+**One daemon, enforced twice.** The daemon takes a named mutex on startup
+(`skywatch/singleton.py`, `Local\skywatch-daemon`; an flock on
+`data/skywatch.lock` off Windows) and a second copy exits before loading the
+catalog with `another skywatch daemon holds the lock`. The supervisor checks
+that same mutex and then the pid file through in-process Win32 calls — no
+`tasklist`, no timeout — and treats anything it cannot decide as *running*.
+Both exist because of 2026-10-26: the old `tasklist` probe timed out on a
+swapping laptop, was read as "not running", and 63 daemons accumulated, each
+recomputing the full catalog (3,366 s per pass instead of 63 s) and fighting
+over the Telegram long-poll (HTTP 409). Verify with a second instance:
+`python -m skywatch.daemon --no-bot` must log the lock line and exit.
+
 ```powershell
 $base     = "$PWD\tasks"        # run from the project root
 $action   = New-ScheduledTaskAction -Execute "wscript.exe" `
@@ -261,6 +273,37 @@ Run it in the foreground to watch it work:
 python -m skywatch.daemon --verbose
 python -m skywatch.daemon --once      # single scheduler tick, then exit
 ```
+
+## Following the phone
+
+The private bot's allowed chats follow the phone, so `/tonight` and the alerts
+are for wherever you actually are. `skywatch/phone_location.py` reads the GPS
+file the phone appends to on Dropbox (`/locations.txt`, the same file the daily
+diary consumes; an iOS Shortcut writes one `M/D/YY, H:MM AM- lat, lon[, app]`
+line per ping), takes the last line, and every 15 minutes moves each follower
+there when the phone is more than 2 km from the stored spot — timezone from
+`timezonefinder`, place name from Nominatim, same as a shared Telegram pin.
+The engine caches passes per location, so the next tick simply computes for the
+new place. The first check runs at daemon start, before the first tick.
+
+What it will not do: move anyone when the file is older than 3 days by
+Dropbox's `server_modified` (phone off or not syncing — the line's own stamp is
+phone-local with no zone and is not trusted), or move subscribers in open mode
+(no `ALLOWED_CHAT_IDS`), since strangers' alerts must not track the owner's
+phone. `/where` still works and still takes effect immediately; the next check
+overrides it only if the phone is 2+ km away from what you set.
+
+Credentials: `[dropbox.diary_reader]` in the same `vault.toml` as the bot token
+(`app_key`, `app_secret`, `refresh_token` — a scoped Dropbox app with read
+access). Without that section the daemon logs nothing and nobody moves.
+
+```bash
+python -m skywatch.cli phone           # where the phone is, who would move, how far
+python -m skywatch.cli phone --apply   # move them now instead of waiting for the daemon
+```
+
+Measured 2026-10-26 23:09: daemon start, ping 7 min old, subscriber moved
+Budakalász → Savannah, United States (8,121 km), timezone America/New_York.
 
 ## How it works
 

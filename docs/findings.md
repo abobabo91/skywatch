@@ -217,3 +217,28 @@ Two fixes, both necessary:
 
 And filter quiet hours *before* applying the cap — otherwise three 04:00 passes
 consume the night's budget and are then silenced, so nothing is sent at all.
+
+## The supervisor multiplied the daemon 63 times
+
+Measured 2026-10-26 on the watcher laptop (7.4 GB RAM, swapping). The old
+`supervisor._pid_running` shelled out to `tasklist /FI "PID eq N"` with a 30 s
+timeout and returned False on timeout. Under load the timeout fired on every
+5-minute run, so each run started another daemon and never stopped the previous
+ones. 63 `python -m skywatch.daemon` processes were running by 22:00:
+
+| State | Daemons | One event computation for Budakalász |
+|---|---|---|
+| 22:42 | 63 | 3,366 s |
+| 22:45 | ~1 (others just killed) | 133 s |
+| 22:51 | 1 | 63 s |
+
+Every copy also long-polled Telegram with the same token, so the log filled with
+`getUpdates failed: HTTP 409 Conflict: terminated by other getUpdates request`.
+The machine itself sat at 170 MB free and 96 % CPU; freeing the duplicates gave
+back ~1.5 GB.
+
+Two consequences in the code: the daemon owns a named mutex and a second copy
+exits before loading anything (`singleton.py`), and the supervisor's liveness
+check is an in-process Win32 call that treats "cannot decide" as "running"
+(`supervisor.py`). A missed restart costs five minutes; a false start used to
+cost a duplicate forever.
